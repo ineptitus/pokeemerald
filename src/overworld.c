@@ -28,6 +28,9 @@
 #include "link_rfu.h"
 #include "load_save.h"
 #include "main.h"
+#include "window.h" //new
+#include "text.h" //new
+#include "string_util.h" //new
 #include "malloc.h"
 #include "m4a.h"
 #include "map_name_popup.h"
@@ -188,6 +191,8 @@ COMMON_DATA void (*gFieldCallback)(void) = NULL;
 COMMON_DATA bool8 (*gFieldCallback2)(void) = NULL;
 COMMON_DATA u8 gLocalLinkPlayerId = 0; // This is our player id in a multiplayer mode.
 COMMON_DATA u8 gFieldLinkPlayerCount = 0;
+static u8 sPracticeFrameWindowId = WINDOW_NONE; //new
+static u32 sPracticeLastDisplayedFrame = 0xFFFFFFFF; //new
 
 EWRAM_DATA static u8 sObjectEventLoadFlag = 0;
 EWRAM_DATA struct WarpData gLastUsedWarp = {0};
@@ -302,6 +307,18 @@ static const struct BgTemplate sOverworldBgTemplates[] =
         .baseTile = 0
     }
 };
+static const struct WindowTemplate sPracticeFrameWindowTemplate = 
+{
+    .bg = 0,
+    .tilemapLeft = 18,
+    .tilemapTop = 1,
+    .width = 12,
+    .height = 2,
+    .paletteNum = 15,
+    .baseBlock = 0x3E0,
+}; //new
+
+static const u8 sText_PracticeFrame[] = _("FRAME: "); //new
 
 static const struct ScanlineEffectParams sFlashEffectParams =
 {
@@ -575,6 +592,54 @@ static bool32 IsDummyWarp(struct WarpData *warp)
     else
         return TRUE;
 }
+
+static void PracticeFrameCounter_Update(void)
+{
+    u32 frame = gMain.vblankCounter1;
+
+    if (sPracticeFrameWindowId == WINDOW_NONE)
+    {
+        sPracticeFrameWindowId = AddWindow(&sPracticeFrameWindowTemplate);
+
+        if (sPracticeFrameWindowId == WINDOW_NONE)
+            return;
+
+        PutWindowTilemap(sPracticeFrameWindowId);
+        sPracticeLastDisplayedFrame = 0xFFFFFFFF;
+    }
+
+    if (frame == sPracticeLastDisplayedFrame)
+        return;
+
+    sPracticeLastDisplayedFrame = frame;
+
+    ConvertUIntToDecimalStringN(
+        gStringVar1,
+        frame,
+        STR_CONV_MODE_LEADING_ZEROS,
+        8
+    );
+
+    StringCopy(gStringVar4, sText_PracticeFrame);
+    StringAppend(gStringVar4, gStringVar1);
+
+    FillWindowPixelBuffer(sPracticeFrameWindowId, PIXEL_FILL(0));
+
+    AddTextPrinterParameterized(
+        sPracticeFrameWindowId,
+        FONT_SMALL,
+        gStringVar4,
+        0,
+        0,
+        TEXT_SKIP_DRAW,
+        NULL
+    );
+
+    CopyWindowToVram(
+        sPracticeFrameWindowId,
+        COPYWIN_FULL
+    );
+} //new
 
 struct MapHeader const *const Overworld_GetMapHeaderByGroupAndId(u16 mapGroup, u16 mapNum)
 {
@@ -1473,6 +1538,7 @@ static void OverworldBasic(void)
     UpdatePaletteFade();
     UpdateTilesetAnimations();
     DoScheduledBgTilemapCopiesToVram();
+    PracticeFrameCounter_Update(); //new
 }
 
 // This CB2 is used when starting
